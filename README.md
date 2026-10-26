@@ -776,3 +776,8 @@ Fixes, measured with the same rule before and after:
   modules (1.2 m formwork panels, 1.5 m segment rings). Their periods drop from 2.4 m
   and 3.0 m to 1.2 m and 1.5 m (427 and 341 px/m).
 - **Metro columns are 1.15 m in diameter**, so three panels fit around them.
+
+## License
+
+Copyright (C) 2026 Giorgio Clivio. Released under the GNU General Public License v3.0; see
+[LICENSE](LICENSE).

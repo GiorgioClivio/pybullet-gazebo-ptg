@@ -3,4 +3,4 @@
 Set only by `python3 tools/package.py --release`, which also records the release fingerprint (SHA-256 of the
 repository's SHA256SUMS manifest) in RELEASES.md.
 """
-SNAPSHOT = "26w44b"
+SNAPSHOT = "26w44c"
