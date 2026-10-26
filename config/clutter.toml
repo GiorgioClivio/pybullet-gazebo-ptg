@@ -1,0 +1,23 @@
+# Small objects on furniture tops (with details on): wood or lab work surfaces at least 0.25 m wide.
+# Slots per surface = area x per_square_metre (x furniture.density), between min and max; each slot is a
+# seeded choice from the room's list ("*" for purposes not listed), skipped when it does not fit.
+
+[clutter]
+per_square_metre = 5.0
+min = 2
+max = 8
+
+# The first slot of these supports always holds this kind.
+[clutter.first]
+kitchen_counter = "microwave"
+
+[clutter.items]
+"*" = ["bottle", "mug", "book_stack", "small_plant", "vase", "laptop", "magazine", "printer"]
+kitchen = ["microwave", "bowl", "bottle", "mug", "towel"]
+bathroom = ["bottle", "towel", "toothbrush"]
+laundry = ["bottle", "towel", "laundry_basket"]
+workshop = ["toolbox", "bottle", "laptop", "magazine"]
+bedroom = ["book_stack", "vase", "bottle", "small_plant"]
+dining = ["bowl", "mug", "bottle", "book_stack", "small_plant"]
+lab = ["laptop", "mug", "book_stack", "bottle", "magazine", "small_plant"]
+lab_aseptic = ["test_tube_rack", "beaker", "flask", "reagent_bottle", "test_tube_rack", "laptop"]

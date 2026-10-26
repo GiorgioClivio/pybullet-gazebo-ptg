@@ -1,0 +1,49 @@
+# Which rooms a building has, their variants, style families and laboratories.
+# Purposes are dealt to the rooms of each storey after a seeded shuffle and repeat when a storey has
+# more rooms than purposes. Every purpose needs furniture groups in furniture.toml.
+
+[rooms]
+purposes = ["living", "office", "bedroom", "storage", "bathroom", "kitchen", "laundry", "workshop", "meeting"]
+# With 3+ rooms, the smallest rooms (never the spawn room) take these purposes, in this order.
+small_rooms = ["bathroom", "kitchen"]
+# The largest room with both sides above min_side (not a small-room purpose) becomes this purpose;
+# purpose = "" turns the rule off.
+largest_room = { purpose = "dining", min_side = 4.2 }
+
+# One variant per room, a seeded choice from its list. Variants select furniture
+# (furniture.toml, groups_by_variant) and style families (below).
+[rooms.variants]
+living = ["reading", "television"]
+office = ["studio", "administration"]
+bedroom = ["guest", "main"]
+storage = ["archive", "supplies"]
+bathroom = ["shower", "washroom"]
+kitchen = ["breakroom", "domestic"]
+laundry = ["utility"]
+workshop = ["repair", "electronics"]
+meeting = ["training", "conference"]
+dining = ["shared", "domestic"]
+
+# Style family per purpose and variant ("*" = any variant): "corporate", "warm", "wayfinding" or "lab";
+# a list is a seeded choice per room. Purposes not listed are corporate.
+[rooms.styles]
+living = { "*" = ["warm", "wayfinding"] }                 # cosy, may be semi-public
+bedroom = { "*" = "warm" }                                # private: never wayfinding
+office = { studio = ["wayfinding", "corporate"], administration = "corporate" }
+meeting = { "*" = "corporate" }
+storage = { "*" = "corporate" }
+workshop = { "*" = "corporate" }
+laundry = { "*" = "corporate" }
+bathroom = { shower = "warm", washroom = "corporate" }
+kitchen = { domestic = "warm", breakroom = "corporate" }
+dining = { domestic = "warm", shared = "corporate" }
+lab = { "*" = "lab" }
+
+# Laboratories: with this probability per storey, the largest candidate room with both sides >= min_side
+# becomes a lab. Labs cycle through `cycle` slots from a seeded offset: one in `cycle` is Lab D66,
+# the others the aseptic lab.
+[rooms.labs]
+candidates = ["workshop", "storage"]
+min_side = 3.3
+probability = 0.6
+cycle = 6

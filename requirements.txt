@@ -1,0 +1,4 @@
+pybullet>=3.2.7
+Pillow>=10
+tomli>=2; python_version < "3.11"
+scipy>=1.10  # gazebo.py only: exact convex hulls

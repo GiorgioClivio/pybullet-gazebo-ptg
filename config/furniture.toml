@@ -1,0 +1,85 @@
+# Furniture per room purpose, and how dense rooms are.
+# Object kinds: see figures/catalog/assets.png (python3 tools/indoor_catalog.py lists them all).
+# An item is "kind", or ["kind", dx, dy, turn]: offset in metres from the group's first item and a turn
+# in quarter turns (2 = facing it). A group is placed atomically against a wall; when it does not fit,
+# its first item alone is tried. Labs: "lab" is Lab D66, "lab_aseptic" the other labs.
+
+[furniture]
+density = 1.0           # multiplies the fill and clutter counts (and their minimum and maximum)
+disabled = []           # kinds never placed anywhere, e.g. ["toy", "floor_book"]
+# Groups starting with these kinds stand anywhere off the travel lanes (room middle), not against a wall.
+free = ["meeting_table", "dining_table"]
+
+# The first group of these purposes is repeated: copies = area / area_per_copy, between 1 and max.
+[furniture.repeat]
+purposes = ["dining", "office", "storage", "lab", "lab_aseptic"]
+area_per_copy = 24.0    # square metres
+max = 4
+
+[furniture.groups]
+living = [["sofa", ["coffee_table", 0, 0.95, 0]], ["armchair"], ["tv_stand"],
+          ["dining_table", ["chair", 0, -0.9, 0], ["chair", 0, 0.9, 2], ["chair", -0.8, -0.9, 0], ["chair", 0.8, 0.9, 2],
+           ["chair", 0.8, -0.9, 0], ["chair", -0.8, 0.9, 2]]]
+office = [["desk", ["chair", 0, 0.45, 2]], ["bookcase"]]
+bedroom = [["bed"], ["cabinet"], ["side_table"]]
+storage = [["bookcase"], ["cabinet"], ["boxes"]]
+# Long tables (2.4 x 1.0 m): wood for dining, living and kitchen, glass for meeting rooms; chairs on both
+# long sides (dx -0.8 / 0 / 0.8, dy -/+0.9) and at the ends (dx -/+1.48, turned 3 / 1 to face the table).
+# {any = [groupA, groupB]} tries the alternatives in order: a meeting room too small for the long glass
+# table gets the 1.6 m table against a wall instead.
+# Long tables are "free" (above): where the whole group does not fit, trailing chairs are dropped one by
+# one down to two, so the order keeps every smaller set symmetric (ends first, then diagonal pairs).
+dining = [["dining_table", ["chair", 0, -0.9, 0], ["chair", 0, 0.9, 2], ["chair", -0.8, -0.9, 0], ["chair", 0.8, 0.9, 2],
+           ["chair", 0.8, -0.9, 0], ["chair", -0.8, 0.9, 2], ["chair", -1.48, 0, 3], ["chair", 1.48, 0, 1]],
+          ["cabinet"]]
+bathroom = [["toilet"], ["sink"], ["shower"]]
+kitchen = [["refrigerator"], ["kitchen_counter"], ["oven"], ["dining_table", ["chair", 0, -0.9, 0], ["chair", 0, 0.9, 2], ["chair", -0.8, -0.9, 0], ["chair", 0.8, 0.9, 2],
+           ["chair", 0.8, -0.9, 0], ["chair", -0.8, 0.9, 2]]]
+laundry = [["washing_machine"], ["sink"], ["cabinet"]]
+workshop = [["workbench"], ["cart"], ["toolbox"]]
+meeting = [{ any = [["meeting_table", ["chair", 0, -0.9, 0], ["chair", 0, 0.9, 2], ["chair", -0.8, -0.9, 0], ["chair", 0.8, 0.9, 2],
+           ["chair", 0.8, -0.9, 0], ["chair", -0.8, 0.9, 2], ["chair", -1.48, 0, 3], ["chair", 1.48, 0, 1]],
+                   ["table", ["chair", -0.45, -0.83, 0], ["chair", 0.45, 0.83, 2]]] },
+           ["bookcase"]]
+lab = [[["lab_desk", -0.81, 0, 0], ["lab_desk", 0.81, 0, 0], ["lab_chair", -0.81, 0.72, 2], ["lab_chair", 0.81, 0.72, 2]],
+       ["lab_pegboard"], ["lab_cabinet"], ["lab_desk", ["lab_chair", 0, 0.72, 2]], ["lab_drawers"]]
+lab_aseptic = [["lab_bench", ["lab_task_chair", 0, 0.62, 2]], ["fume_hood"],
+               ["lab_bench", ["lab_task_chair", 0.45, 0.62, 2]], ["lab_white_desk", ["lab_task_chair", 0, 0.55, 2]]]
+
+# Replaces the groups of one "purpose/variant".
+[furniture.groups_by_variant]
+"living/reading" = [["sofa", ["coffee_table", 0, 0.95, 0]], ["armchair"], ["bookcase"],
+                    ["dining_table", ["chair", 0, -0.9, 0], ["chair", 0, 0.9, 2], ["chair", -0.8, -0.9, 0], ["chair", 0.8, 0.9, 2],
+           ["chair", 0.8, -0.9, 0], ["chair", -0.8, 0.9, 2]]]
+"bathroom/washroom" = [["toilet"], ["sink"]]
+
+# Single items after the groups, each against a seeded wall. A list inside is a seeded choice.
+# "*" is used by purposes not listed here.
+[furniture.extras]
+"*" = ["plant", ["lamp", "plant"], ["floor_book", "toy", "boxes"]]
+bathroom = ["bin", "laundry_basket"]
+kitchen = ["bin", "stool"]
+laundry = ["laundry_basket", "bucket"]
+workshop = ["crate", "bin"]
+lab = ["lab_bin", "lab_cabinet"]
+lab_aseptic = ["bin", "cabinet"]
+
+# With details on: count = area / area_per_item (x density), between min and max; each item a seeded choice.
+[furniture.fill]
+area_per_item = 5.0     # square metres per item
+min = 6
+max = 16
+
+[furniture.fill.items]
+living = ["armchair", "side_table", "basket", "magazine", "plant"]
+office = ["cart", "bin", "cabinet", "boxes", "plant"]
+bedroom = ["suitcase", "basket", "side_table", "floor_book", "plant"]
+storage = ["crate", "boxes", "cart", "cabinet", "bookcase"]
+dining = ["chair", "cart", "bin", "plant", "cabinet"]
+bathroom = ["bin", "laundry_basket", "bucket", "towel"]
+kitchen = ["stool", "cart", "bin", "crate"]
+laundry = ["laundry_basket", "bucket", "cabinet", "boxes"]
+workshop = ["toolbox", "crate", "cart", "stool", "backpack"]
+meeting = ["chair", "cabinet", "plant", "backpack"]
+lab = ["lab_chair", "lab_cabinet", "lab_bin", "boxes", "lab_desk"]
+lab_aseptic = ["lab_task_chair", "cabinet", "bin", "cart"]

@@ -1,0 +1,23 @@
+# Building shell: footprint, storeys and fixed dimensions. Metres unless stated.
+# These are the defaults of indoor.Config; explicit Config(...) arguments and CLI flags win over them.
+
+[building]
+seed = 7                # 66 builds only the Lab D66 room
+rooms = 12              # rooms per storey, corridors and landings excluded
+floors = 1              # 1 to 3 storeys
+width = 22.0            # footprint, x
+depth = 18.0            # footprint, y
+min_room = 3.2          # minimum clear room side
+corridor = 1.6          # corridor clear width (>= 1.2)
+wall = 0.16             # wall thickness
+slab = 0.15             # floor slab thickness
+storey = 3.0            # floor to floor (>= 2.4 m headroom below the slab)
+door_width = 1.0        # clear opening; doors have no leaves or thresholds
+door_height = 2.1
+window_width = 1.2
+window_height = 1.2
+sill = 0.9              # window sill above the floor
+loops = 0.25            # probability of extra doors; one closed route per storey is always guaranteed
+roof = false            # close the top storey (sensor runs)
+furnished = true        # place furniture
+details = true          # textures, extra furniture, clutter and wall landmarks
