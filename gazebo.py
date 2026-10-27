@@ -1,8 +1,9 @@
 """Gazebo Sim (Harmonic, SDF 1.11) export of a generated scene, and a PyBullet loader for the same files.
 
-One static model, one link: a collision per part, chosen by indoor.collision_shape exactly as load_pybullet
-does (box, the exact convex hull of the part mesh written as a mesh, or a concave trimesh for cables), friction 0.8 and no restitution;
-the visuals are fastload's merged meshes (one per storey, kind, texture and colour) with their textures.
+One static model, one link: a collision per architectural part, chosen by indoor.collision_shape exactly as load_pybullet
+does (box, the exact convex hull of the part mesh written as a mesh, or a concave trimesh for cables), and the same shapes of
+the objects (furniture, landmarks, props) merged into one concave mesh per storey and kind (collision_groups), friction 0.8
+and no restitution; the visuals are fastload's merged meshes (one per storey, kind, texture and colour) with their textures.
 
     python3 gazebo.py --seed 7 --out exports/building_seed7            # building
     python3 gazebo.py --metro --seed 7 --out exports/metro_seed7       # metro station
@@ -15,17 +16,20 @@ checks that they collide and look like load_pybullet's.
 """
 from pathlib import Path
 import argparse
+import itertools
 import json
 import shutil
 import xml.etree.ElementTree as ET
 
 FRICTION = .8  # load_pybullet: lateralFriction=.8, restitution=0
+MERGED = ("furniture", "landmark", "prop")  # objects: one concave collision mesh per storey and kind (collision_groups)
 # Gazebo's default empty world (systems, scene, sun) plus the scene model.
 WORLD = """<?xml version="1.0" ?>
 <sdf version="1.11">
   <world name="{name}">
     <physics name="1ms" type="bullet-featherstone">
       <max_step_size>0.001</max_step_size>
+      <dart><collision_detector>bullet</collision_detector></dart>
       <real_time_factor>1.0</real_time_factor>
     </physics>
     <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
@@ -108,15 +112,52 @@ def _pose(parent, center, q=(0, 0, 0, 1)):
     ET.SubElement(parent, "pose", rotation_format="quat_xyzw").text = _num([*center, *q])
 
 
+def collision_groups(scene):
+    """[(collision name, [part indices])] in export order: every architectural part alone (c<i>_<kind>), the MERGED
+    objects of one storey and kind together (m<level>_<kind>). Gazebo's DART plugin visits every collision shape at
+    every 1 ms step: 2,100 separate furniture, landmark and prop shapes cost a third of real time with a quadruped
+    in the building, and merging them into a few concave meshes restores real time (README "Gazebo Sim")."""
+    groups, merged = [], {}
+    for i, b in enumerate(scene["boxes"]):
+        if b["kind"] in MERGED:
+            merged.setdefault((b["level"], b["kind"]), []).append(i)
+        else:
+            groups.append((f"c{i}_{b['kind']}", [i]))
+    return groups + [(f"m{level}_{kind}", parts) for (level, kind), parts in sorted(merged.items())]
+
+
+def _append(merged, g, center, q):
+    """Add g's triangles to the merged mesh, vertices moved into the world frame (position, xyzw quaternion)."""
+    import numpy as np
+    from scipy.spatial.transform import Rotation
+    n = len(merged["vertices"])
+    merged["vertices"] += (Rotation.from_quat(q).apply(np.asarray(g["vertices"], float)) + center).tolist()
+    merged["indices"] += [n + k for k in g["indices"]]
+
+
 def _collisions(link, scene, root):
-    """One <collision> per part, named c<part index>_<kind>; shared shapes share one OBJ file (hull_*: convex hulls)."""
+    """One <collision> per collision_groups entry; single parts share one OBJ file per distinct shape (hull_*: convex hulls)."""
     from indoor import collision_shape
     files = {}
-    for i, b in enumerate(scene["boxes"]):
-        key, kind, data = collision_shape(b)
-        c = ET.SubElement(link, "collision", name=f"c{i}_{b['kind']}")
-        _pose(c, b.get("collision_center", b["center"]), b.get("orientation", (0, 0, 0, 1)))
+    for name, parts in collision_groups(scene):
+        c = ET.SubElement(link, "collision", name=name)
         geometry = ET.SubElement(c, "geometry")
+        if len(parts) > 1:  # the parts' shapes (box corners' hull, convex hull, trimesh), posed, in one concave mesh
+            merged = dict(vertices=[], indices=[])
+            for b in (scene["boxes"][i] for i in parts):
+                key, kind, data = collision_shape(b)
+                g = _hull(dict(vertices=[[x * s / 2 for x, s in zip(signs, data)] for signs in itertools.product((-1, 1), repeat=3)],
+                               indices=[])) if kind == "box" else _hull(data) if kind == "convex" else data
+                _append(merged, g, b.get("collision_center", b["center"]), b.get("orientation", (0, 0, 0, 1)))
+            _pose(c, (0, 0, 0))
+            files[name] = f"meshes/{name}.obj"
+            _write_obj(root / files[name], merged)
+            ET.SubElement(ET.SubElement(geometry, "mesh"), "uri").text = files[name]
+            _friction(c)
+            continue
+        b = scene["boxes"][parts[0]]
+        key, kind, data = collision_shape(b)
+        _pose(c, b.get("collision_center", b["center"]), b.get("orientation", (0, 0, 0, 1)))
         if kind == "box":
             ET.SubElement(ET.SubElement(geometry, "box"), "size").text = _num(data)
         else:
@@ -124,11 +165,16 @@ def _collisions(link, scene, root):
                 files[key] = f"meshes/{'hull' if kind == 'convex' else 'collision'}_{len(files):04d}.obj"
                 _write_obj(root / files[key], _hull(data) if kind == "convex" else data)
             ET.SubElement(ET.SubElement(geometry, "mesh"), "uri").text = files[key]
-        friction = ET.SubElement(ET.SubElement(c, "surface"), "friction")
-        ode = ET.SubElement(friction, "ode")
-        ET.SubElement(ode, "mu").text = ET.SubElement(ode, "mu2").text = repr(FRICTION)
-        ET.SubElement(ET.SubElement(friction, "bullet"), "friction").text = repr(FRICTION)
+        _friction(c)
     return len(files)
+
+
+def _friction(collision):
+    """<surface><friction> of a collision: FRICTION for ODE (mu, mu2) and bullet."""
+    friction = ET.SubElement(ET.SubElement(collision, "surface"), "friction")
+    ode = ET.SubElement(friction, "ode")
+    ET.SubElement(ode, "mu").text = ET.SubElement(ode, "mu2").text = repr(FRICTION)
+    ET.SubElement(ET.SubElement(friction, "bullet"), "friction").text = repr(FRICTION)
 
 
 def _visuals(link, scene, root, textures=None):

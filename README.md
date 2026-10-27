@@ -419,15 +419,18 @@ collision_ids, visual_ids = load_export("exports/my_scene", client)   # the same
 
 | File | Content |
 |---|---|
-| `world.sdf` | Gazebo's default empty world (physics, user commands, scene broadcaster, sensors, IMU, contact, sun) including the model |
-| `<name>/model.sdf`, `model.config` | one static model, one link: a collision per part (`c<i>_<kind>`, i = index in `scene["boxes"]`) and the merged visuals |
-| `<name>/meshes/*.obj`, `textures/*.png` | collision meshes (one per distinct shape), merged visual meshes (UVs, normals), their texture images |
+| `world.sdf` | Gazebo's default empty world (physics with DART's bullet collision detector, user commands, scene broadcaster, sensors, IMU, contact, sun) including the model |
+| `<name>/model.sdf`, `model.config` | one static model, one link: a collision per architectural part (`c<i>_<kind>`, i = index in `scene["boxes"]`), one concave mesh per storey and kind for the objects (`m<level>_<kind>`: furniture, landmarks, props; `gazebo.collision_groups`) and the merged visuals |
+| `<name>/meshes/*.obj`, `textures/*.png` | collision meshes (one per distinct architectural shape, one per object group), merged visual meshes (UVs, normals), their texture images |
 | `scene.json` | the scene JSON: spawn, spaces, portals, stairs, clear paths, objects, semantics |
 
 What is identical in both simulators, by construction: every collision shape and pose (boxes; for turned and
 rounded parts the exact convex hull of their vertices, computed with SciPy's Qhull and written as a mesh, because
 Gazebo's `<mesh optimization="convex_hull">` is a V-HACD voxel approximation that rested test spheres up to 8 mm
-higher; concave trimeshes for cables; all chosen by `indoor.collision_shape`, which `load_pybullet` uses too), friction 0.8 and no restitution, the visual meshes, UVs,
+higher; concave trimeshes for cables; all chosen by `indoor.collision_shape`, which `load_pybullet` uses too; the
+objects' boxes and hulls are written as the triangles of one concave mesh per storey and kind, because Gazebo's
+DART plugin visits every collision shape at every 1 ms step and 2,100 separate object shapes cost a third of real
+time with a quadruped in the building), friction 0.8 and no restitution, the visual meshes, UVs,
 colours and textures, and the scene metadata. What differs: the physics engines (Bullet in PyBullet; DART or
 bullet-featherstone in Gazebo) solve contacts differently, and the renderers (PyBullet's OpenGL/TinyRenderer,
 Gazebo's ogre2 PBR) shade differently. Place the robot at `scene["spawn"]` (0.55 m is a base-height hint); the world
@@ -436,15 +439,20 @@ has no ground plane, since every scene has its own floors.
 Checks (`exports/` is git-ignored):
 
 - `python3 tools/gazebo_parity.py EXPORT` loads `scene.json` with `load_pybullet` and the exported files with
-  `load_export`, then compares every part's collision AABB, a vertical and horizontal ray grid and a rendered image.
+  `load_export`, then compares every collision's AABB (a merged mesh against the union of its parts'), a vertical
+  and horizontal ray grid (a merged mesh within 5 mm: Bullet casts rays at a convex hull a few mm off and at its
+  triangles exactly, so rays grazing a hull's silhouette are re-cast 5 mm aside) and a rendered image.
 - `python3 tools/gazebo_probe.py make EXPORT`, then `gazebo` (inside a Gazebo installation, with the gz-sim Python
   bindings) and `check`: spheres released on flat surfaces must rest at surface + radius in every engine.
 
-Measured on 2026-10-26 with Gazebo Sim 8.15 (Harmonic), seed 7: the reloaded exports match the native scenes
-exactly (building 2,633 part AABBs, 6,821 rays, rendered image; metro 4,184 AABBs, 65,054 rays, image). Probe
-spheres (r = 5 cm, one per part, 71 on the building at 16 heights, 120 on the metro at 24 heights) rest within
-0.01 mm in PyBullet and 1.00 mm in Gazebo with both DART and bullet-featherstone. Collision meshes carry vertex
-normals because Gazebo's DART plugin ignores meshes without them.
+Measured on 2026-10-26 with Gazebo Sim 8.15 (Harmonic): the reloaded exports match the native scenes (building
+seed 7: 2,633 parts in 304 collisions, 6,821 rays, rendered image; building seed 0: 2,374 parts in 274 collisions;
+metro seed 7: 4,184 parts in 1,410 collisions, 65,054 rays, image). Probe spheres (r = 5 cm, one per part, 67 on
+seed 0 and 71 on seed 7) rest within 0.01 mm in PyBullet and 1.00 mm in Gazebo with both DART and
+bullet-featherstone. Collision meshes carry vertex normals because Gazebo's DART plugin ignores meshes without
+them. Speed, a quadruped (Spot, ros2_control at 1 kHz) standing in building seed 0 under DART, real-time factor:
+0.18-0.30 with one collision per part and the default (ODE) detector, 0.63-0.73 with the bullet detector, 1.00
+with the bullet detector and the merged object meshes (the same robot in an empty-room world: 1.00).
 
 ## Ceiling lighting (pybullet_pbr only)
 
