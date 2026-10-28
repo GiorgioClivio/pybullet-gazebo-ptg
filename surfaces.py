@@ -220,7 +220,7 @@ def _print_texture(spec, rng, n):
 
 
 METRO_STYLES = ("concrete", "lining", "terrazzo", "tactile", "ballast", "metro_tile",
-                "wide_sign", "departures", "line_map")
+                "wide_sign", "departures", "line_map", "rock")
 
 
 def _fit_text(draw, text, box_w, box_h, start):
@@ -271,6 +271,11 @@ def _metro_texture(spec):
             s = rng.randint(105, 215)
             draw.polygon([(x + r * math.cos(a) * rng.uniform(.7, 1.2), y + r * math.sin(a) * rng.uniform(.7, 1.2))
                           for a in (k * math.pi / 3 for k in range(6))], fill=(s, s, s))
+    elif style == "rock":  # Mine rock (tunnel.py): blocky grey patches.
+        for x in range(0, n, 32):
+            for y in range(0, n, 32):
+                v = rng.randint(150, 235)
+                draw.rectangle((x, y, x + 31, y + 31), fill=(v, v, v))
     elif style == "metro_tile":  # Glazed 0.30 x 0.15 m wall tiles in running bond at a 1.2 m period.
         for row, y in enumerate(range(0, n, 64)):
             for x in range(-64 * (row % 2), n, 128):

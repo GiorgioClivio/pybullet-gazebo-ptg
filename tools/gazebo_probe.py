@@ -18,6 +18,7 @@ import json
 import math
 import random
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -123,8 +124,10 @@ def gazebo(export, engine):
     fixture = TestFixture(str(Path("probe_world.sdf").resolve()))
     fixture.on_post_update(record)
     fixture.finalize()
+    clock = time.perf_counter()
     fixture.server().run(True, steps, False)
-    print(json.dumps(dict(engine=engine, sim_time=sim[0], z=z)))
+    wall = time.perf_counter() - clock   # the world asks for real time: wall > sim time means the physics is too slow
+    print(json.dumps(dict(engine=engine, sim_time=sim[0], wall_s=round(wall, 2), rtf=round(sim[0] / wall, 3), z=z)))
 
 
 def check(export, results):

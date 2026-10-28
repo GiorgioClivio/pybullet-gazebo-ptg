@@ -1,0 +1,37 @@
+# Seeded mine tunnels (tunnel.py). rooms and extent are drawn once per seed unless TunnelConfig / the CLI sets them;
+# widths, heights and radii are drawn per gallery and per chamber, so some galleries are narrow and low, others
+# wide and high. Ranges are [low, high], metres.
+
+[tunnel.envelope]
+rooms = [3, 5]                        # chambers (the first is a rectangular room); leaves stay dead ends
+extent = [45.0, 55.0]                 # side of the square map
+tunnel_width = [1.4, 2.6]             # drawn per gallery; never below what the reference robot needs to drive through
+tunnel_height = [2.0, 3.0]            # drawn per gallery, never above the chambers it joins
+room_radius = [1.8, 3.5]              # drawn per chamber; each chamber is the union of 2-4 discs
+room_height = [2.4, 4.5]              # drawn per chamber
+step_lines = [2, 5]                   # parallel lines across the map where the floor drops by a short flight of steps
+links = [2, 4]                        # galleries that join two galleries away from the chambers
+drifts = [3, 6]                       # dead-end drives off a chamber or a gallery, ending in rock
+drift_length = [12.0, 25.0]
+
+[tunnel.rules]
+cell = 0.25                           # grid cell: walls, floors and ceilings are blocks of this size
+max_grade = 0.08                      # steepest slope of the smooth floor relief
+floor_quantum = 0.05                  # floors are terraced in steps of this height
+riser = 0.10                          # step height of a flight (2-4 risers)
+tread = 0.30
+loop_probability = 0.5                # chance that a non-dead-end chamber gets an extra gallery
+dead_end_share = 0.4                  # share of chambers kept as dead ends (at least one)
+levels = 1                            # stacked levels (1-3, --levels), joined by staircases like a building's storeys
+level_gap = 4.5                       # m between levels: spaces are at most level_gap - 1.2 m high
+stair_riser = 0.15                    # staircases between levels (2-3 per pair of levels)
+stair_tread = 0.36                    # above a cell diagonal (0.354 m): one riser per cell step in any direction
+
+[tunnel.robot]
+# Reference robot: every gallery lets a body of this footprint drive through, forwards or backwards, bends included
+# (half-width + margin clear on both sides of the path), up to height + margin. Defaults: a mid-size quadruped with
+# payload.
+length = 1.10
+width = 0.50
+height = 1.04
+margin = 0.15

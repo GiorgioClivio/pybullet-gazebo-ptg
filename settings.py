@@ -1,6 +1,6 @@
-"""User settings: rooms, furniture, density, styles and metro ranges, from the TOML files in config/.
+"""User settings: rooms, furniture, density, styles, metro and tunnel ranges, from the TOML files in config/.
 
-config/ holds the defaults (building, rooms, furniture, clutter, metro .toml). To change them, pass an
+config/ holds the defaults (building, rooms, furniture, clutter, metro, tunnel .toml). To change them, pass an
 override: a folder with any of those files, or one .toml file whose top-level tables are those names,
 holding only the keys to change. Tables merge key by key; lists and values replace the default.
 
@@ -22,7 +22,7 @@ except ModuleNotFoundError:  # Python < 3.11
     import tomli as tomllib
 
 DEFAULTS = Path(__file__).resolve().parent / "config"
-FILES = ("building", "rooms", "furniture", "clutter", "metro")
+FILES = ("building", "rooms", "furniture", "clutter", "metro", "tunnel")
 # Tables whose keys are names the user may add (purposes, variants, kinds); all others are fixed schemas.
 OPEN = {("rooms", "variants"), ("rooms", "styles"), ("furniture", "groups"), ("furniture", "groups_by_variant"),
         ("furniture", "extras"), ("furniture", "fill", "items"), ("clutter", "first"), ("clutter", "items")}
@@ -132,6 +132,9 @@ def _validate(s):
             for p in envelope["palettes"] if p not in PALETTES]
     bad += [f"metro.envelope.{k} must be [low, high] with low <= high" for k, v in envelope.items()
             if k not in ("car_lengths", "palettes") and isinstance(v, list) and not (len(v) == 2 and v[0] <= v[1])]
+    bad += [f"tunnel.envelope.{k} must be [low, high] with 0 < low <= high" for k, v in s["tunnel"]["envelope"].items()
+            if not (isinstance(v, list) and len(v) == 2 and 0 < v[0] <= v[1])]
+    bad += [f"tunnel.{table}.{k} must be positive" for table in ("rules", "robot") for k, v in s["tunnel"][table].items() if not 0 < v]
     if not 0 < furniture["density"] <= 10:
         bad.append("furniture.density must be in (0, 10]")
     if bad:

@@ -7,6 +7,7 @@ and no restitution; the visuals are fastload's merged meshes (one per storey, ki
 
     python3 gazebo.py --seed 7 --out exports/building_seed7            # building
     python3 gazebo.py --metro --seed 7 --out exports/metro_seed7       # metro station
+    python3 gazebo.py --tunnel --seed 7 --out exports/tunnel_seed7     # mine tunnels
     gz sim -r exports/building_seed7/world.sdf                         # GZ_SIM_RESOURCE_PATH must hold exports/building_seed7
 
 Output: world.sdf (runnable world that includes the model), <model>/model.config, <model>/model.sdf,
@@ -18,6 +19,7 @@ from pathlib import Path
 import argparse
 import itertools
 import json
+import math
 import shutil
 import xml.etree.ElementTree as ET
 
@@ -114,16 +116,22 @@ def _pose(parent, center, q=(0, 0, 0, 1)):
 
 def collision_groups(scene):
     """[(collision name, [part indices])] in export order: every architectural part alone (c<i>_<kind>), the MERGED
-    objects of one storey and kind together (m<level>_<kind>). Gazebo's DART plugin visits every collision shape at
+    objects of one storey and kind together (m<level>_<kind>), and the kinds a scene lists in scene["gazebo_merge"]
+    together per square tile (t<level>_<kind>_<i>_<j>; tunnel.py). Gazebo's DART plugin visits every collision shape at
     every 1 ms step: 2,100 separate furniture, landmark and prop shapes cost a third of real time with a quadruped
     in the building, and merging them into a few concave meshes restores real time (README "Gazebo Sim")."""
-    groups, merged = [], {}
+    groups, merged, tiled = [], {}, {}
+    tiles = scene.get("gazebo_merge", {})   # e.g. tunnel.py: {"kinds": [...], "tile": 10.0}
     for i, b in enumerate(scene["boxes"]):
         if b["kind"] in MERGED:
             merged.setdefault((b["level"], b["kind"]), []).append(i)
+        elif b["kind"] in tiles.get("kinds", ()):
+            x, y = (math.floor(b["center"][a] / tiles["tile"]) for a in (0, 1))
+            tiled.setdefault((b["level"], b["kind"], x, y), []).append(i)
         else:
             groups.append((f"c{i}_{b['kind']}", [i]))
-    return groups + [(f"m{level}_{kind}", parts) for (level, kind), parts in sorted(merged.items())]
+    return groups + [(f"m{level}_{kind}", parts) for (level, kind), parts in sorted(merged.items())] + \
+        [(f"t{level}_{kind}_{x}_{y}", parts) for (level, kind, x, y), parts in sorted(tiled.items())]
 
 
 def _append(merged, g, center, q):
@@ -283,14 +291,17 @@ def load_export(out, client=0):
 
 
 def main():
-    """Command line: generate a building or a metro station and export it for Gazebo."""
+    """Command line: generate a building, a metro station or mine tunnels and export it for Gazebo."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--metro", action="store_true", help="Metro station instead of a building")
+    parser.add_argument("--tunnel", action="store_true", help="Mine tunnels instead of a building")
+    parser.add_argument("--no-steps", action="store_true", help="Tunnels: level floors, no steps")
+    parser.add_argument("--levels", type=int, choices=(1, 2, 3), help="Tunnels: levels of galleries (default: config/tunnel.toml)")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--floors", type=int, help="Building storeys (default: config/building.toml)")
     parser.add_argument("--config", type=Path, help="settings override: a folder like config/ or one .toml file")
     parser.add_argument("--textures", type=Path)
-    parser.add_argument("--name", help="Gazebo model and world name (default: ptg_<building|metro>_seed<seed>)")
+    parser.add_argument("--name", help="Gazebo model and world name (default: ptg_<building|metro|tunnel>_seed<seed>)")
     parser.add_argument("--out", type=Path, required=True, help="New or empty output folder")
     args = parser.parse_args()
     if args.out.exists() and any(args.out.iterdir()):
@@ -300,10 +311,13 @@ def main():
     if args.metro:
         from metro import MetroConfig, generate_metro
         scene = generate_metro(MetroConfig(seed=args.seed))
+    elif args.tunnel:
+        from tunnel import TunnelConfig, generate_tunnel
+        scene = generate_tunnel(TunnelConfig(seed=args.seed, steps=not args.no_steps, levels=args.levels))
     else:
         from indoor import Config, generate
         scene = generate(Config(seed=args.seed, floors=args.floors))
-    name = args.name or f"ptg_{'metro' if args.metro else 'building'}_seed{args.seed}"
+    name = args.name or f"ptg_{'metro' if args.metro else 'tunnel' if args.tunnel else 'building'}_seed{args.seed}"
     export_sdf(scene, args.out, name, args.textures)
     print(f"{args.out}/world.sdf: {len(scene['boxes'])} parts, spawn {scene['spawn']}; "
           f"run with GZ_SIM_RESOURCE_PATH={args.out.resolve()}")

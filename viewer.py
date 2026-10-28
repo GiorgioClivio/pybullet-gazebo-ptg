@@ -52,7 +52,8 @@ def tab_pressed(keys):
 
 
 class Walker:
-    radius, height, eye_height, step_height = .22, 1.75, 1.60, .18
+    # step_height: a building riser is <= 0.178 m; tunnel.py's cell corners join two 0.10 m edges (0.20 m).
+    radius, height, eye_height, step_height = .22, 1.75, 1.60, .22
 
     def __init__(self, client, feet):
         self.client, self.feet, self.velocity_z = client, list(feet), 0.
@@ -74,11 +75,22 @@ class Walker:
                 return False
         return True
 
+    def _step_top(self, feet):
+        """Highest top of what the capsule at feet penetrates, if every such body tops out within step_height above
+        the feet (a step met at any angle); None if anything taller is in the way."""
+        tops = []
+        for body, link in p.getOverlappingObjects(*p.getAABB(self.body, physicsClientId=self.client),
+                                                  physicsClientId=self.client) or ():
+            if body != self.body and p.getClosestPoints(self.body, body, -.001, linkIndexB=link, physicsClientId=self.client):
+                tops.append(p.getAABB(body, link, physicsClientId=self.client)[1][2])
+        return max(tops) if tops and max(tops) <= feet[2] + self.step_height + .005 else None
+
     def _support(self, xy, low, high):
-        # Sample the capsule footprint, not just its centre, at tread/landing edges.
-        r = self.radius
+        # Sample the capsule footprint, not just its centre, at tread/landing edges, diagonals included: a step met
+        # at an angle touches the capsule between the axes.
+        r, d = self.radius, self.radius * .7071
         points = [(xy[0] + dx, xy[1] + dy) for dx, dy in
-                  ((0, 0), (r, 0), (-r, 0), (0, r), (0, -r))]
+                  ((0, 0), (r, 0), (-r, 0), (0, r), (0, -r), (d, d), (d, -d), (-d, d), (-d, -d))]
         hits = p.rayTestBatch([[x, y, high] for x, y in points],
                              [[x, y, low] for x, y in points], physicsClientId=self.client)
         return max((h[3][2] for h in hits if h[0] >= 0 and h[4][2] > .5), default=None)
@@ -87,7 +99,9 @@ class Walker:
         # Short sweeps prevent tunnelling through thin walls, even with a slow GUI.
         count = max(1, math.ceil(math.hypot(dx, dy) / .035), math.ceil(dt / (1 / 120)))
         for _ in range(count):
-            grounded = self._support(self.feet, self.feet[2] - .015, self.feet[2] + .015) is not None
+            # Grounded also just after a small step down (still falling the last few centimetres): walking over
+            # terraces and steps never waits for a landing before the next step up.
+            grounded = self.velocity_z > -1. and self._support(self.feet, self.feet[2] - .08, self.feet[2] + .015) is not None
             for axis, delta in enumerate((dx / count, dy / count)):
                 if not delta:
                     continue
@@ -100,8 +114,18 @@ class Walker:
                     candidate[2] = floor + .002
                     if not self._clear(raised):
                         continue
-                if self._clear(candidate):
+                clear = self._clear(candidate)
+                if not clear and grounded:   # a step edge the rays missed: stand on its top if it is a step
+                    top = self._step_top(candidate)
+                    if top is not None and top > candidate[2]:
+                        candidate[2] = top + .002
+                        clear = self._clear([*self.feet[:2], candidate[2]]) and self._clear(candidate)
+                if clear:
                     self.feet = candidate
+                    if grounded:   # walk down steps instead of dropping off them
+                        below = self._support(self.feet, self.feet[2] - self.step_height, self.feet[2] - .005)
+                        if below is not None and self._clear([*self.feet[:2], below + .002]):
+                            self.feet[2], self.velocity_z = below + .002, 0.
             duration = dt / count
             self.velocity_z -= 9.81 * duration
             next_z = self.feet[2] + self.velocity_z * duration
@@ -143,7 +167,8 @@ class Viewer:
             camera = p.getDebugVisualizerCamera(physicsClientId=self.client)
             self.orbit = camera[10], camera[8], camera[9], camera[11]
             if self.walker is None:
-                self.walker = Walker(self.client, [*self.scene["spawn"][:2], .002])
+                # scene["spawn"][2] is the floor + 0.55 m base-height hint (tunnel floors are not at z = 0).
+                self.walker = Walker(self.client, [*self.scene["spawn"][:2], self.scene["spawn"][2] - .55 + .002])
                 exits = [e["center"] for e in self.scene["portals"] if 0 in e["rooms"]]
                 if exits:
                     target = min(exits, key=lambda v: math.dist(v[:2], self.walker.feet[:2]))

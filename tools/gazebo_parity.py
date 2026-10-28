@@ -38,6 +38,9 @@ def _clients(scene, export):
 def _rays(scene, step):
     """(from, to) pairs: a vertical grid over the bounds, and x/y sweeps at two heights per storey floor."""
     x0, y0, x1, y1 = scene["bounds"]
+    # Off any round grid: tunnel.py builds on 0.25 m cells, and a ray along a box face grazes it (Bullet's convex
+    # boxes and the merged triangles disagree on grazing hits, not on the surfaces).
+    x0, y0 = x0 + .113, y0 + .113
     zs = sorted({round(s.get("z", s.get("floor_z", 0.)), 3) for s in scene.get("levels", ())} or {0.}) \
         if "levels" in scene else [3. * k for k in range(scene["config"].get("floors", 1))]
     top, bottom = max(zs) + 20., min(zs) - 20.

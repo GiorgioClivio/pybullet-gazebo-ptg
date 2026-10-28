@@ -1,7 +1,7 @@
 # pybullet-gazebo-ptg
 
-Seeded procedural indoor environments (multi-storey buildings and metro stations) for PyBullet and Gazebo Sim,
-with matching collisions in both simulators.
+Seeded procedural indoor environments (multi-storey buildings, metro stations and mine tunnels) for PyBullet and
+Gazebo Sim, with matching collisions in both simulators.
 
 ![A generated building, seen from above](images/ptg_overview.png)
 
@@ -743,6 +743,66 @@ around each bore is built in 0.29 m rows, so small gaps behind the lining are po
 No light fixtures are generated (`lights.py` is not applied to the metro). TinyRenderer cannot blend glass, so
 it renders opaque. The dimensions are realistic defaults, not a code compliance
 certification.
+
+## Mine tunnels (tunnel.py)
+
+```bash
+python3 tunnel.py --seed 7                    # viewer; Tab walks from the spawn chamber
+python3 tunnel.py --seed 7 --no-steps         # level floors: no steps and no terracing
+python3 tunnel.py --seed 7 --levels 2         # 2 (or 3) levels of galleries joined by stair shafts
+python3 tunnel.py --seed 7 --roof             # closed ceilings for sensor runs
+python3 tunnel.py --seed 7 --headless --render images/tunnel_seed7.png
+python3 gazebo.py --tunnel --seed 7 --out exports/tunnel_seed7
+```
+
+![Mine tunnels, seed 7](images/tunnel_seed7.png)
+
+![Mine tunnels on two levels, seed 7](images/tunnel_levels2_seed7.png)
+
+A seeded mine: narrow winding tunnels between small chambers, blocky like a voxel cave. The method follows the
+graph-then-geometry pipeline of PLUME ([arXiv 2508.20926](https://arxiv.org/abs/2508.20926)) and the "worm" tunnels
+of voxel caves:
+
+- chambers are unions of 2-4 discs; the first chamber (and one in ten of the others) is a rectangular room with
+  concrete walls and floor, a level floor and ceiling, tables with chairs, desks, lockers and shelving;
+- a minimum spanning tree joins the chambers; some leaves stay dead ends (`dead_end_share`), the other chambers may
+  get extra tunnels, so there are loops;
+- each tunnel is a worm that wanders smoothly and homes in on its target in the last 8 m; every tunnel draws its
+  own width and height and every chamber its own radius and height (`config/tunnel.toml`), so some are narrow crawls
+  and others wide drives;
+- everything is carved in a grid of 0.25 m columns and emitted as boxes merged into rectangles (floors, rock walls,
+  ceilings with `--roof`): walls and floors are blocks, the layout is organic. Floors follow a gentle relief (at most
+  8 %) terraced in 5 cm steps, crossed by 2-5 lines of 2-4 steps of 10 cm; `--no-steps` keeps every floor at z = 0;
+- timber sets (two posts and a cap) stand every 4-6 m where a tunnel section is regular; other chambers hold stores,
+  workshops, refuges or pump stations (crates, toolboxes, workbenches, lockers, racks). The robot starts in a chamber
+  that is not a dead end (`scene["spawn"]`);
+- `--levels 2|3` (`tunnel_levels.py`) stacks complete mines `level_gap` = 4.5 m apart on one shared relief, like the
+  storeys of a building. Every pair of levels is joined by 2-3 straight stair shafts (2 m wide, concrete walls to the
+  full height, risers of at most `stair_riser` = 0.15 m on `stair_tread` = 0.36 m treads) chosen first in rock that
+  no gallery may dig; a gallery that would cross one takes a grid route round it. Behind each shaft's head and foot a
+  small landing chamber is dug and joined from its back to the nearest gallery of its level. Galleries and chambers
+  are at most 3.3 m high, so 0.6 m of rock and two slabs stay between levels.
+
+The scene uses the building's schema: `spaces` holds `chamber`, `room`, `tunnel` and `stairs` entries (sizes, dead
+ends, levels), `portals` the tunnel mouths, `clear_paths` the tunnel and stair centrelines, `stairs` and `levels` as
+for the building, so `load_pybullet`, the viewer, the minimap and `gazebo.py` work unchanged. `test_tunnel.py` runs
+the same checks on seeds 0-9 with 1, 2 and 3 levels: determinism, dead ends and through chambers, the rectangular
+room and its tables, level floors without steps, size variety, every pair of levels joined by at least one shaft
+(2-3 in most seeds), and along every gallery and stair, with PyBullet: a floor everywhere and no step above 0.21 m,
+at least 1.9 m of headroom, a box of the reference robot's footprint and height (`[tunnel.robot]`, plus margin)
+turned along the path touching nothing but the floor, the viewer's walker reaching the far end, and with `--roof` no
+ray escaping to the sky. Seed 7: 53 m across, 4 chambers (1 rectangular, 2 dead ends), 9 tunnels, 2,624 parts,
+generated in 0.3 s; with two levels 14 chambers, 25 tunnels, 3 shafts, 4,347 parts in 1.2 s; three levels 21
+chambers, 35 tunnels, 5 shafts, 6,835 parts in 1.9 s.
+
+For Gazebo the scene sets `scene["gazebo_merge"]`: rock, floors, ceilings and timber become one concave mesh per kind
+and 10 m tile (`gazebo.collision_groups`), 54 collision shapes for seed 7 instead of 2,624 boxes (86 with two levels,
+150 with three); the office building (seed 0) exports 274. Measured on 2026-10-26/27 in Gazebo Sim 8.15 on that
+day's seed 7 (1,868 parts, 63 collisions): the export reloads identically in PyBullet (`tools/gazebo_parity.py`:
+31,490 rays, image identical); 120
+probe spheres rest within 1 mm with DART and bullet-featherstone; the same probe run takes the same wall time as on
+the office building (4.6 s for 3 s simulated; that run's absolute speed is set by the probe harness, a Python callback
+every step, so it only compares the two worlds).
 
 ## Texel audit (tools/texel_audit.py)
 
